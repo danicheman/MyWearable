@@ -17,9 +17,11 @@
 package com.example.android.sunshine.app;
 
 import android.content.BroadcastReceiver;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -28,20 +30,35 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.PowerManager;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
 import android.support.v7.graphics.Palette;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
+import android.text.format.DateUtils;
+import android.util.Log;
 import android.view.SurfaceHolder;
+import android.view.View;
+import android.view.ViewParent;
 
+
+import com.bumptech.glide.util.Util;
+import com.example.android.sunshine.app.data.WeatherContract;
 
 import java.lang.ref.WeakReference;
 import java.util.Calendar;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
+
+
 
 /**
  * Analog watch face with a ticking second hand. In ambient mode, the second hand isn't
@@ -49,6 +66,18 @@ import java.util.concurrent.TimeUnit;
  * mode. The watch face is drawn with less contrast in mute mode.
  */
 public class BadtzWeatherWatch extends CanvasWatchFaceService {
+
+    private Uri mUri;
+
+    private static final String[] WEARABLE_COLUMNS = {
+            WeatherContract.WeatherEntry.TABLE_NAME + "." + WeatherContract.WeatherEntry._ID,
+            WeatherContract.WeatherEntry.COLUMN_DATE,
+            WeatherContract.WeatherEntry.COLUMN_SHORT_DESC,
+            WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_MIN_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_DEGREES,
+            WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
+    };
 
     /*
      * Update rate in milliseconds for interactive mode. We update once a second to advance the
@@ -86,7 +115,10 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine {
+    private class Engine extends CanvasWatchFaceService.Engine implements LoaderManager.LoaderCallbacks<Cursor> {
+
+        private static final String TAG = "WatchEngine";
+
         private static final float HOUR_STROKE_WIDTH = 5f;
         private static final float MINUTE_STROKE_WIDTH = 3f;
         private static final float SECOND_TICK_STROKE_WIDTH = 2f;
@@ -105,6 +137,13 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                 invalidate();
             }
         };
+
+        private final BroadcastReceiver mWeatherUpdatedReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                //todo: restart the weather loader
+            }
+        }
         private boolean mRegisteredTimeZoneReceiver = false;
         private boolean mMuteMode;
         private float mCenterX;
@@ -130,6 +169,8 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
+
+            String location = Utility.getPreferredLocation( getApplicationContext() );
 
             setWatchFaceStyle(new WatchFaceStyle.Builder(BadtzWeatherWatch.this)
                     .setCardPeekMode(WatchFaceStyle.PEEK_MODE_SHORT)
@@ -428,6 +469,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                 /* Update time zone in case it changed while we weren't visible. */
                 mCalendar.setTimeZone(TimeZone.getDefault());
                 invalidate();
+
             } else {
                 unregisterReceiver();
             }
@@ -448,7 +490,11 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             }
             mRegisteredTimeZoneReceiver = true;
             IntentFilter filter = new IntentFilter(Intent.ACTION_TIMEZONE_CHANGED);
+            IntentFilter weatherUpdated = new IntentFilter(
+                    com.example.android.sunshine.app.sync.SunshineSyncAdapter.ACTION_DATA_UPDATED
+            );
             BadtzWeatherWatch.this.registerReceiver(mTimeZoneReceiver, filter);
+            BadtzWeatherWatch.this.registerReceiver(mWeatherUpdatedReceiver, weatherUpdated);
         }
 
         private void unregisterReceiver() {
@@ -488,6 +534,45 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                         - (timeMs % INTERACTIVE_UPDATE_RATE_MS);
                 mUpdateTimeHandler.sendEmptyMessageDelayed(MSG_UPDATE_TIME, delayMs);
             }
+        }
+
+        @Override
+        public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+            String location = Utility.getPreferredLocation(getApplicationContext());
+
+            mUri = WeatherContract.WeatherEntry.buildWeatherLocationWithDate(location,WeatherContract.normalizeDate(System.currentTimeMillis()));
+
+            if ( null != mUri ) {
+                // Now create and return a CursorLoader that will take care of
+                // creating a Cursor for the data being displayed.
+                return new CursorLoader(
+                        getApplicationContext(),
+                        mUri,
+                        WEARABLE_COLUMNS,
+                        null,
+                        null,
+                        null
+                );
+            }
+
+            Log.d(TAG, "onCreateLoader: Loading data for location" + location);
+            /*ViewParent vp = getView().getParent();
+            if ( vp instanceof CardView ) {
+                ((View)vp).setVisibility(View.INVISIBLE);
+            }*/
+            return null;
+        }
+
+        @Override
+        public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+            //put loader data onto watch face
+            //col 6
+            Utility.getArtUrlForWeatherCondition();
+        }
+
+        @Override
+        public void onLoaderReset(Loader<Cursor> loader) {
+
         }
     }
 }
