@@ -17,11 +17,12 @@
 package com.example.android.sunshine.app;
 
 import android.content.BroadcastReceiver;
-import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -36,22 +37,16 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
-import android.support.v4.content.Loader;
 import android.support.v7.graphics.Palette;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
-import android.text.format.DateUtils;
 import android.util.Log;
 import android.view.SurfaceHolder;
-import android.view.View;
-import android.view.ViewParent;
 
 
-import com.bumptech.glide.util.Util;
 import com.example.android.sunshine.app.data.WeatherContract;
+import com.example.android.sunshine.app.sync.SunshineSyncAdapter;
 
 import java.lang.ref.WeakReference;
 import java.util.Calendar;
@@ -67,18 +62,18 @@ import java.util.concurrent.TimeUnit;
  */
 public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
-    private Uri mUri;
-
     private static final String[] WEARABLE_COLUMNS = {
             WeatherContract.WeatherEntry.TABLE_NAME + "." + WeatherContract.WeatherEntry._ID,
             WeatherContract.WeatherEntry.COLUMN_DATE,
             WeatherContract.WeatherEntry.COLUMN_SHORT_DESC,
             WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
             WeatherContract.WeatherEntry.COLUMN_MIN_TEMP,
-            WeatherContract.WeatherEntry.COLUMN_DEGREES,
             WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
     };
 
+    private ContentValues mWeatherValues;
+
+    private static final int WEATHER_LOADER = 0;
     /*
      * Update rate in milliseconds for interactive mode. We update once a second to advance the
      * second hand.
@@ -92,6 +87,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
     @Override
     public Engine onCreateEngine() {
+
         return new Engine();
     }
 
@@ -115,7 +111,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         }
     }
 
-    private class Engine extends CanvasWatchFaceService.Engine implements LoaderManager.LoaderCallbacks<Cursor> {
+    private class Engine extends CanvasWatchFaceService.Engine {
 
         private static final String TAG = "WatchEngine";
 
@@ -126,10 +122,16 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         private static final float CENTER_GAP_AND_CIRCLE_RADIUS = 4f;
 
         private static final int SHADOW_RADIUS = 6;
+        private static final int MSG_LOAD_WEATHER = 0;
         private final Rect mPeekCardBounds = new Rect();
+
         /* Handler to update the time once a second in interactive mode. */
         private final Handler mUpdateTimeHandler = new EngineHandler(this);
         private Calendar mCalendar;
+
+
+        private AsyncTask<Void,Void,Cursor> mLoadWeatherTask;
+
         private final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -138,13 +140,40 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             }
         };
 
+        //weather vars
+        private int mWeatherId;
+        private float mMinTemp;
+        private float mMaxTemp;
+        private String mShortDesc;
+        private long mWeatherDate;
+
+        final Handler mLoadWeatherHandler = new Handler() {
+            @Override
+            public void handleMessage(Message msg) {
+                switch (msg.what) {
+                    case MSG_LOAD_WEATHER:
+                        cancelLoadWeatherTask();
+
+                        mLoadWeatherTask = new FetchWeatherTask();
+                        mLoadWeatherTask.execute();
+                }
+            }
+        };
+
+        private void cancelLoadWeatherTask() {
+            if (mLoadWeatherTask!= null) {
+                mLoadWeatherTask.cancel(true);
+            }
+        }
+
         private final BroadcastReceiver mWeatherUpdatedReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                //todo: restart the weather loader
+                //todo: async Task load weather
+
             }
-        }
-        private boolean mRegisteredTimeZoneReceiver = false;
+        };
+        private boolean mRegisteredRecievers = false;
         private boolean mMuteMode;
         private float mCenterX;
         private float mCenterY;
@@ -169,6 +198,9 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
+            Log.d(TAG, "onCreate: in OnCreate");
+
+            mLoadWeatherHandler.sendEmptyMessage(MSG_LOAD_WEATHER);
 
             String location = Utility.getPreferredLocation( getApplicationContext() );
 
@@ -309,6 +341,12 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                 mSecondPaint.setAlpha(inMuteMode ? 80 : 255);
                 invalidate();
             }
+        }
+
+        public void onWeatherLoaded() {
+            Log.d(TAG, "onWeatherLoaded: in OnWeatherLoaded");
+
+
         }
 
         @Override
@@ -485,10 +523,10 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         }
 
         private void registerReceiver() {
-            if (mRegisteredTimeZoneReceiver) {
+            if (mRegisteredRecievers) {
                 return;
             }
-            mRegisteredTimeZoneReceiver = true;
+            mRegisteredRecievers = true;
             IntentFilter filter = new IntentFilter(Intent.ACTION_TIMEZONE_CHANGED);
             IntentFilter weatherUpdated = new IntentFilter(
                     com.example.android.sunshine.app.sync.SunshineSyncAdapter.ACTION_DATA_UPDATED
@@ -498,11 +536,12 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         }
 
         private void unregisterReceiver() {
-            if (!mRegisteredTimeZoneReceiver) {
+            if (!mRegisteredRecievers) {
                 return;
             }
-            mRegisteredTimeZoneReceiver = false;
+            mRegisteredRecievers = false;
             BadtzWeatherWatch.this.unregisterReceiver(mTimeZoneReceiver);
+            BadtzWeatherWatch.this.unregisterReceiver(mWeatherUpdatedReceiver);
         }
 
         /**
@@ -536,43 +575,72 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             }
         }
 
-        @Override
-        public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-            String location = Utility.getPreferredLocation(getApplicationContext());
+        class FetchWeatherTask extends AsyncTask<Void,Void,Cursor> {
 
-            mUri = WeatherContract.WeatherEntry.buildWeatherLocationWithDate(location,WeatherContract.normalizeDate(System.currentTimeMillis()));
+            private PowerManager.WakeLock mWakeLock;
 
-            if ( null != mUri ) {
-                // Now create and return a CursorLoader that will take care of
-                // creating a Cursor for the data being displayed.
-                return new CursorLoader(
-                        getApplicationContext(),
-                        mUri,
+            @Override
+            protected Cursor doInBackground(Void... params) {
+
+
+                PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+                mWakeLock = powerManager.newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK, "BadtzWeatherWatchFaceWakeLock");
+                mWakeLock.acquire();
+
+                //use default location from shared preferences
+                //String location = Utility.getPreferredLocation(getApplicationContext());
+
+
+                //use the default weather uri to get the latest weather data.
+                return getContentResolver().query(
+                        WeatherContract.WeatherEntry.CONTENT_URI,
                         WEARABLE_COLUMNS,
                         null,
                         null,
-                        null
+                        "_id desc LIMIT 1"
                 );
             }
 
-            Log.d(TAG, "onCreateLoader: Loading data for location" + location);
-            /*ViewParent vp = getView().getParent();
-            if ( vp instanceof CardView ) {
-                ((View)vp).setVisibility(View.INVISIBLE);
-            }*/
-            return null;
-        }
+            @Override
+            protected void onPostExecute(Cursor weatherCursor) {
+                releaseWakeLock();
+                if(weatherCursor.getCount() == 0) {
+                    //no weather data
+                    Log.d(TAG, "onPostExecute: No Weather found!");
+                } else {
+                    weatherCursor.moveToFirst();
 
-        @Override
-        public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
-            //put loader data onto watch face
-            //col 6
-            Utility.getArtUrlForWeatherCondition();
-        }
+                    //reset/initialize weatherValues
+                    mWeatherValues = new ContentValues();
+                    DatabaseUtils.cursorRowToContentValues(weatherCursor,mWeatherValues);
 
-        @Override
-        public void onLoaderReset(Loader<Cursor> loader) {
+                    //insert the url to the weather image for this day.
+                    mWeatherValues.put("artUrl",
+                        Utility.getArtUrlForWeatherCondition(getApplicationContext(),
+                            mWeatherValues.getAsInteger(WeatherContract.WeatherEntry.COLUMN_WEATHER_ID)
+                        )
+                    );
 
+                    Log.d(TAG, "onPostExecute: "+mWeatherValues.toString());
+                    Log.d(TAG, "onPostExecute: CV: getAsString: "+ mWeatherValues.getAsString("min"));
+                    onWeatherLoaded();
+                }
+
+
+            }
+
+            @Override
+            protected void onCancelled() {
+                releaseWakeLock();
+            }
+
+            private void releaseWakeLock() {
+                if (mWakeLock != null) {
+                    mWakeLock.release();
+                    mWakeLock = null;
+                }
+            }
         }
     }
 }
