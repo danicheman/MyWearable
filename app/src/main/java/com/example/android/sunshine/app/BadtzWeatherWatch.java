@@ -30,8 +30,8 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -42,14 +42,21 @@ import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
 import android.util.Log;
+import android.view.Display;
+import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
-
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.TextView;
 
 import com.example.android.sunshine.app.data.WeatherContract;
-import com.example.android.sunshine.app.sync.SunshineSyncAdapter;
+
+import org.w3c.dom.Text;
 
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -128,7 +135,10 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         /* Handler to update the time once a second in interactive mode. */
         private final Handler mUpdateTimeHandler = new EngineHandler(this);
         private Calendar mCalendar;
-
+        private View mWeatherDataLayout;
+        private TextView mMaxTextView,mMinTextView,mMonthDayTextView;
+        private final Point displaySize = new Point();
+        private int specW, specH;
 
         private AsyncTask<Void,Void,Cursor> mLoadWeatherTask;
 
@@ -141,11 +151,11 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         };
 
         //weather vars
-        private int mWeatherId;
+        /*private int mWeatherId;
         private float mMinTemp;
         private float mMaxTemp;
         private String mShortDesc;
-        private long mWeatherDate;
+        private long mWeatherDate;*/
 
         final Handler mLoadWeatherHandler = new Handler() {
             @Override
@@ -169,7 +179,10 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         private final BroadcastReceiver mWeatherUpdatedReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                //todo: async Task load weather
+                cancelLoadWeatherTask();
+
+                mLoadWeatherTask = new FetchWeatherTask();
+                mLoadWeatherTask.execute();
 
             }
         };
@@ -201,8 +214,6 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             Log.d(TAG, "onCreate: in OnCreate");
 
             mLoadWeatherHandler.sendEmptyMessage(MSG_LOAD_WEATHER);
-
-            String location = Utility.getPreferredLocation( getApplicationContext() );
 
             setWatchFaceStyle(new WatchFaceStyle.Builder(BadtzWeatherWatch.this)
                     .setCardPeekMode(WatchFaceStyle.PEEK_MODE_SHORT)
@@ -261,6 +272,22 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             });
 
             mCalendar = Calendar.getInstance();
+
+            LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            mWeatherDataLayout = inflater.inflate(R.layout.wearable_weather_data, null);
+            mMaxTextView = (TextView) mWeatherDataLayout.findViewById(R.id.max);
+            mMinTextView = (TextView) mWeatherDataLayout.findViewById(R.id.min);
+            mMonthDayTextView = (TextView) mWeatherDataLayout.findViewById(R.id.month_day);
+
+            //display height/width info
+            Display display = ((WindowManager) getSystemService(Context.WINDOW_SERVICE))
+                    .getDefaultDisplay();
+            display.getSize(displaySize);
+
+            specW = View.MeasureSpec.makeMeasureSpec(displaySize.x,
+                    View.MeasureSpec.EXACTLY);
+            specH = View.MeasureSpec.makeMeasureSpec(displaySize.y,
+                    View.MeasureSpec.EXACTLY);
         }
 
         @Override
@@ -345,7 +372,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
         public void onWeatherLoaded() {
             Log.d(TAG, "onWeatherLoaded: in OnWeatherLoaded");
-
+            invalidate();
 
         }
 
@@ -407,9 +434,18 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
+
+            if(mWeatherValues != null && mWeatherValues.containsKey(WeatherContract.WeatherEntry.COLUMN_MIN_TEMP)) {
+                mMinTextView.setText(Integer.toString(Math.round(mWeatherValues.getAsFloat(WeatherContract.WeatherEntry.COLUMN_MIN_TEMP))));
+                mMaxTextView.setText(Integer.toString(Math.round(mWeatherValues.getAsFloat(WeatherContract.WeatherEntry.COLUMN_MAX_TEMP))));
+            }
+
+
+
             long now = System.currentTimeMillis();
             mCalendar.setTimeInMillis(now);
 
+            //draw the background
             if (mAmbient && (mLowBitAmbient || mBurnInProtection)) {
                 canvas.drawColor(Color.BLACK);
             } else if (mAmbient) {
@@ -417,6 +453,15 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             } else {
                 canvas.drawBitmap(mBackgroundBitmap, 0, 0, mBackgroundPaint);
             }
+
+            //month/day info:
+            Date curDate = new Date();
+            String dayDateMonth = new SimpleDateFormat("EEE FF/MM MMM").format(curDate);
+            mMonthDayTextView.setText(dayDateMonth);
+            //canvas.drawColor(Color.BLACK);
+            mWeatherDataLayout.measure(specW, specH);
+            mWeatherDataLayout.layout(0, 0, mWeatherDataLayout.getMeasuredWidth(), mWeatherDataLayout.getMeasuredHeight());
+            mWeatherDataLayout.draw(canvas);
 
             /*
              * Draw ticks. Usually you will want to bake this directly into the photo, but in
@@ -496,6 +541,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             if (mAmbient) {
                 canvas.drawRect(mPeekCardBounds, mBackgroundPaint);
             }
+
         }
 
         @Override
