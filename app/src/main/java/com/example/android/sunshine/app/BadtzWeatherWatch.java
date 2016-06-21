@@ -471,7 +471,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
             //month/day info:
             Date curDate = new Date();
-            String dayDateMonth = new SimpleDateFormat("EEE FF/MM MMM").format(curDate);
+            String dayDateMonth = new SimpleDateFormat("MMM MM/dd EEE").format(curDate);
             mMonthDayTextView.setText(dayDateMonth);
             mWeatherDataLayout.measure(specW, specH);
             mWeatherDataLayout.layout(0, 0, mWeatherDataLayout.getMeasuredWidth(), mWeatherDataLayout.getMeasuredHeight());
