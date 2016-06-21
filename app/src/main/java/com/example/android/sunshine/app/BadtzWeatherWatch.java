@@ -48,13 +48,12 @@ import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.example.android.sunshine.app.data.WeatherContract;
-
-import org.w3c.dom.Text;
 
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
@@ -123,6 +122,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
     private class Engine extends CanvasWatchFaceService.Engine {
 
+
         private static final String TAG = "WatchEngine";
 
         private static final float HOUR_STROKE_WIDTH = 5f;
@@ -153,13 +153,6 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                 invalidate();
             }
         };
-
-        //weather vars
-        /*private int mWeatherId;
-        private float mMinTemp;
-        private float mMaxTemp;
-        private String mShortDesc;
-        private long mWeatherDate;*/
 
         final Handler mLoadWeatherHandler = new Handler() {
             @Override
@@ -211,6 +204,11 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         private boolean mAmbient;
         private boolean mLowBitAmbient;
         private boolean mBurnInProtection;
+        private boolean mIsRound;
+
+
+
+
 
         @Override
         public void onCreate(SurfaceHolder holder) {
@@ -277,7 +275,12 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             mCalendar = Calendar.getInstance();
 
             LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-            mWeatherDataLayout = inflater.inflate(R.layout.wearable_weather_data, null);
+            if(mIsRound) {
+                mWeatherDataLayout = inflater.inflate(R.layout.watchface_square, null);
+            } else {
+                mWeatherDataLayout = inflater.inflate(R.layout.watchface_round, null);
+            }
+
             mMaxTextView = (TextView) mWeatherDataLayout.findViewById(R.id.max);
             mMinTextView = (TextView) mWeatherDataLayout.findViewById(R.id.min);
             mMonthDayTextView = (TextView) mWeatherDataLayout.findViewById(R.id.month_day);
@@ -322,6 +325,12 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
             /* Check and trigger whether or not timer should be running (only in active mode). */
             updateTimer();
+        }
+
+        @Override
+        public void onApplyWindowInsets(WindowInsets insets) {
+            super.onApplyWindowInsets(insets);
+            mIsRound = insets.isRound();
         }
 
         private void updateWatchHandStyle() {
