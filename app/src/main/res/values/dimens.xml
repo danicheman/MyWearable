@@ -56,4 +56,12 @@
     <!-- Today Widget -->
     <dimen name="widget_today_default_width">40dp</dimen>
     <dimen name="widget_today_default_height">40dp</dimen>
+
+    <!-- Watch face -->
+    <dimen name="watchface_padding_top">8dp</dimen>
+    <dimen name="watchface_margin_right">2dp</dimen>
+    <dimen name="watchface_temperature_spacing">5dp</dimen>
+    <dimen name="watchface_month_day_padding">2dp</dimen>
+    <dimen name="watchface_weather_icon">60dp</dimen>
+    <dimen name="watchface_month_day_textsize">13sp</dimen>
 </resources>

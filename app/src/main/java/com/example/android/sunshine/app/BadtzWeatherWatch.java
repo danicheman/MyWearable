@@ -32,11 +32,14 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.PowerManager;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.graphics.Palette;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceService;
@@ -47,6 +50,7 @@ import android.view.LayoutInflater;
 import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.example.android.sunshine.app.data.WeatherContract;
@@ -137,6 +141,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         private Calendar mCalendar;
         private View mWeatherDataLayout;
         private TextView mMaxTextView,mMinTextView,mMonthDayTextView;
+        private ImageView mWeatherImageView;
         private final Point displaySize = new Point();
         private int specW, specH;
 
@@ -223,7 +228,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
             mBackgroundPaint = new Paint();
             mBackgroundPaint.setColor(Color.BLACK);
-            mBackgroundBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bg);
+            mBackgroundBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.badtz_maru_background);
 
             /* Set defaults for colors */
             mWatchHandColor = Color.WHITE;
@@ -278,6 +283,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             mMaxTextView = (TextView) mWeatherDataLayout.findViewById(R.id.max);
             mMinTextView = (TextView) mWeatherDataLayout.findViewById(R.id.min);
             mMonthDayTextView = (TextView) mWeatherDataLayout.findViewById(R.id.month_day);
+            mWeatherImageView = (ImageView) mWeatherDataLayout.findViewById(R.id.weather_image);
 
             //display height/width info
             Display display = ((WindowManager) getSystemService(Context.WINDOW_SERVICE))
@@ -322,6 +328,10 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
         private void updateWatchHandStyle() {
             if (mAmbient) {
+                //change the low temp color
+                mMaxTextView.setTypeface(null, Typeface.BOLD);
+                mMinTextView.setTextColor(ContextCompat.getColor(getApplicationContext(), R.color.grey));
+
                 mHourPaint.setColor(Color.WHITE);
                 mMinutePaint.setColor(Color.WHITE);
                 mSecondPaint.setColor(Color.WHITE);
@@ -338,6 +348,9 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                 mTickAndCirclePaint.clearShadowLayer();
 
             } else {
+                mMaxTextView.setTypeface(null, Typeface.NORMAL);
+                mMinTextView.setTextColor(ContextCompat.getColor(getApplicationContext(), R.color.grey_700));
+
                 mHourPaint.setColor(mWatchHandColor);
                 mMinutePaint.setColor(mWatchHandColor);
                 mSecondPaint.setColor(mWatchHandHighlightColor);
@@ -397,7 +410,7 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
 
             /* Scale loaded background image (more efficient) if surface dimensions change. */
-            float scale = ((float) width) / (float) mBackgroundBitmap.getWidth();
+            float scale = ((float) width) / (float) (mBackgroundBitmap.getWidth()*2);
 
             mBackgroundBitmap = Bitmap.createScaledBitmap(mBackgroundBitmap,
                     (int) (mBackgroundBitmap.getWidth() * scale),
@@ -438,6 +451,11 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             if(mWeatherValues != null && mWeatherValues.containsKey(WeatherContract.WeatherEntry.COLUMN_MIN_TEMP)) {
                 mMinTextView.setText(Integer.toString(Math.round(mWeatherValues.getAsFloat(WeatherContract.WeatherEntry.COLUMN_MIN_TEMP))));
                 mMaxTextView.setText(Integer.toString(Math.round(mWeatherValues.getAsFloat(WeatherContract.WeatherEntry.COLUMN_MAX_TEMP))));
+
+                mWeatherImageView.setImageResource(
+                        Utility.getArtResourceForWeatherCondition(
+                                mWeatherValues.getAsInteger(
+                                        WeatherContract.WeatherEntry.COLUMN_WEATHER_ID)));
             }
 
 
@@ -445,40 +463,24 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
             long now = System.currentTimeMillis();
             mCalendar.setTimeInMillis(now);
 
-            //draw the background
-            if (mAmbient && (mLowBitAmbient || mBurnInProtection)) {
+            //ALWAYS draw the background
+            if (mAmbient) {
                 canvas.drawColor(Color.BLACK);
-            } else if (mAmbient) {
-                canvas.drawBitmap(mGrayBackgroundBitmap, 0, 0, mBackgroundPaint);
+                canvas.drawBitmap(mGrayBackgroundBitmap, (mCenterY/2), mCenterX, mBackgroundPaint);
             } else {
-                canvas.drawBitmap(mBackgroundBitmap, 0, 0, mBackgroundPaint);
+                canvas.drawColor(Color.BLACK);
+                canvas.drawBitmap(mBackgroundBitmap, (mCenterY/2), mCenterX, mBackgroundPaint);
             }
 
             //month/day info:
             Date curDate = new Date();
             String dayDateMonth = new SimpleDateFormat("EEE FF/MM MMM").format(curDate);
             mMonthDayTextView.setText(dayDateMonth);
-            //canvas.drawColor(Color.BLACK);
             mWeatherDataLayout.measure(specW, specH);
             mWeatherDataLayout.layout(0, 0, mWeatherDataLayout.getMeasuredWidth(), mWeatherDataLayout.getMeasuredHeight());
             mWeatherDataLayout.draw(canvas);
 
-            /*
-             * Draw ticks. Usually you will want to bake this directly into the photo, but in
-             * cases where you want to allow users to select their own photos, this dynamically
-             * creates them on top of the photo.
-             */
-            float innerTickRadius = mCenterX - 10;
-            float outerTickRadius = mCenterX;
-            for (int tickIndex = 0; tickIndex < 12; tickIndex++) {
-                float tickRot = (float) (tickIndex * Math.PI * 2 / 12);
-                float innerX = (float) Math.sin(tickRot) * innerTickRadius;
-                float innerY = (float) -Math.cos(tickRot) * innerTickRadius;
-                float outerX = (float) Math.sin(tickRot) * outerTickRadius;
-                float outerY = (float) -Math.cos(tickRot) * outerTickRadius;
-                canvas.drawLine(mCenterX + innerX, mCenterY + innerY,
-                        mCenterX + outerX, mCenterY + outerY, mTickAndCirclePaint);
-            }
+
 
             /*
              * These calculations reflect the rotation in degrees per unit of time, e.g.,
@@ -668,8 +670,6 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
                         )
                     );
 
-                    Log.d(TAG, "onPostExecute: "+mWeatherValues.toString());
-                    Log.d(TAG, "onPostExecute: CV: getAsString: "+ mWeatherValues.getAsString("min"));
                     onWeatherLoaded();
                 }
 
