@@ -33,7 +33,6 @@ import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -216,7 +215,6 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         @Override
         public void onCreate(SurfaceHolder holder) {
             super.onCreate(holder);
-            Log.d(TAG, "onCreate: in OnCreate");
 
             mLoadWeatherHandler.sendEmptyMessage(MSG_LOAD_WEATHER);
 
@@ -384,7 +382,6 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
         }
 
         public void onWeatherLoaded() {
-            Log.d(TAG, "onWeatherLoaded: in OnWeatherLoaded");
             invalidate();
 
         }
