@@ -276,9 +276,9 @@ public class BadtzWeatherWatch extends CanvasWatchFaceService {
 
             LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             if(mIsRound) {
-                mWeatherDataLayout = inflater.inflate(R.layout.watchface_square, null);
-            } else {
                 mWeatherDataLayout = inflater.inflate(R.layout.watchface_round, null);
+            } else {
+                mWeatherDataLayout = inflater.inflate(R.layout.watchface_square, null);
             }
 
             mMaxTextView = (TextView) mWeatherDataLayout.findViewById(R.id.max);

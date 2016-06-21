@@ -59,11 +59,11 @@
 
     <!-- Watch face -->
     <dimen name="watchface_padding_top">8dp</dimen>
-    <dimen name="watchface_margin_right">2dp</dimen>
+    <dimen name="watchface_margin_right">4dp</dimen>
     <dimen name="watchface_temperature_spacing">5dp</dimen>
     <dimen name="watchface_month_day_padding">2dp</dimen>
-    <dimen name="watchface_weather_icon">60dp</dimen>
-    <dimen name="watchface_month_day_textsize">13sp</dimen>
+    <dimen name="watchface_weather_icon">50dp</dimen>
+    <dimen name="watchface_month_day_textsize">11sp</dimen>
 
     <dimen name="watchface_round_icon_padding_top">20dp</dimen>
     <dimen name="watchface_round_temp_padding_top">5dp</dimen>

@@ -23,13 +23,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
-import android.util.Log;
-
-import static com.bumptech.glide.gifdecoder.GifHeaderParser.TAG;
 
 public class WeatherProvider extends ContentProvider {
-
-    private static final String TAG = "WatchWeatherProvider";
 
     // The URI Matcher used by this content provider.
     private static final UriMatcher sUriMatcher = buildUriMatcher();
@@ -177,7 +172,7 @@ public class WeatherProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
-        Log.d(TAG, "query: Querying Content provider " + uri.toString());
+
         // Here's the switch statement that, given a URI, will determine what kind of request it is,
         // and query the database accordingly.
         Cursor retCursor;
@@ -190,13 +185,11 @@ public class WeatherProvider extends ContentProvider {
             }
             // "weather/*"
             case WEATHER_WITH_LOCATION: {
-                Log.d(TAG, "query: matched location");
                 retCursor = getWeatherByLocationSetting(uri, projection, sortOrder);
                 break;
             }
             // "weather"
             case WEATHER: {
-                Log.d(TAG, "WEATHER URI: query() called with: uri = [" + uri + "], projection = [" + projection + "], selection = [" + selection + "], selectionArgs = [" + selectionArgs + "], sortOrder = [" + sortOrder + "]");
                 retCursor = mOpenHelper.getReadableDatabase().query(
                         WeatherContract.WeatherEntry.TABLE_NAME,
                         projection,

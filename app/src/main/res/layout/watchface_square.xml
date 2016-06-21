@@ -55,6 +55,7 @@
         android:paddingRight="@dimen/watchface_month_day_padding"
         android:layout_marginRight="@dimen/watchface_margin_right"
         android:background="@drawable/my_border"
+        android:fontFamily="sans-serif-condensed"
         android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
 
